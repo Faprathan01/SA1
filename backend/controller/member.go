@@ -2,141 +2,136 @@ package controller
 
 import (
 	"net/http"
+
 	"PJ/backend/config"
 	"PJ/backend/entity"
+
 	"github.com/gin-gonic/gin"
 )
 
-// POST /members
+// POST /member
 func CreateMember(c *gin.Context) {
 	var member entity.Member
 
-	// Bind JSON data to member entity
+	// bind เข้าตัวแปร member
 	if err := c.ShouldBindJSON(&member); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Retrieve DB connection
 	db := config.DB()
 
-	// Validate the associated gender
+
+	// ค้นหา gender ด้วย id
 	var gender entity.Gender
-	if err := db.First(&gender, member.GenderID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Gender not found"})
+	db.First(&gender, member.GenderID)
+	if gender.ID == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "gender not found"})
 		return
 	}
 
-	// Hash the password
-	hashedPassword, err := config.HashPassword(member.Password)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
-		return
-	}
 
-	// Create Member record
+	// เข้ารหัสลับรหัสผ่านที่ผู้ใช้กรอกก่อนบันทึกลงฐานข้อมูล
+	hashedPassword, _ := config.HashPassword(member.Password)
+
+	// สร้าง Member
 	m := entity.Member{
-		FirstName: member.FirstName,
-		LastName:  member.LastName,
-		Email:     member.Email,
-		Username:  member.Username,
+		Username: member.Username,
 		Password:  hashedPassword,
-		GenderID:  member.GenderID,
-		
+		Email:     member.Email,
+        FirstName: member.FirstName,
+        LastName:  member.LastName,
+        GenderID:  member.GenderID,
+		Gender:    gender,  //โยงความสัมพันธ์กับ Entity Gender
 	}
 
+	// บันทึก
 	if err := db.Create(&m).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Member created successfully", "data": m})
+	c.JSON(http.StatusCreated, gin.H{"message": "Created success", "data": m})
 }
 
-// GET /members/:id
+// GET /member/:id
 func GetMember(c *gin.Context) {
-	id := c.Param("id")
+	ID := c.Param("id")
 	var member entity.Member
 
-	// Retrieve DB connection
 	db := config.DB()
-
-	// Fetch member record by ID
-	if err := db.Preload("Gender").Preload("Subscriptions").First(&member, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
+	results := db.Preload("Gender").First(&member, ID)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
+	if member.ID == 0 {
+		c.JSON(http.StatusNoContent, gin.H{})
+		return
+	}
 	c.JSON(http.StatusOK, member)
 }
 
 // GET /members
 func ListMembers(c *gin.Context) {
+
 	var members []entity.Member
 
-	// Retrieve DB connection
 	db := config.DB()
-
-	// Fetch all member records
-	if err := db.Preload("Gender").Preload("Subscriptions").Find(&members).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	results := db.Preload("Gender").Find(&members)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, members)
-}
-
-// PATCH /members/:id
-func UpdateMember(c *gin.Context) {
-	id := c.Param("id")
-	var member entity.Member
-
-	// Retrieve DB connection
-	db := config.DB()
-
-	// Fetch member record by ID
-	if err := db.First(&member, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
-		return
-	}
-
-	// Bind JSON data to existing record
-	if err := c.ShouldBindJSON(&member); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Optionally hash new password if provided
-	if member.Password != "" {
-		hashedPassword, err := config.HashPassword(member.Password)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
-			return
-		}
-		member.Password = hashedPassword
-	}
-
-	// Update the member record
-	if err := db.Save(&member).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Member updated successfully", "data": member})
 }
 
 // DELETE /members/:id
 func DeleteMember(c *gin.Context) {
+
 	id := c.Param("id")
-
-	// Retrieve DB connection
 	db := config.DB()
+	if tx := db.Exec("DELETE FROM members WHERE id = ?", id); tx.RowsAffected == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Deleted successful"})
 
-	// Delete the member record
-	if tx := db.Delete(&entity.Member{}, id); tx.RowsAffected == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Member not found"})
+}
+
+// PATCH /members
+func UpdateMember(c *gin.Context) {
+	var member entity.Member
+
+	MemberID := c.Param("id")
+
+	db := config.DB()
+	result := db.First(&member, MemberID)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "id not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Member deleted successfully"})
+	if err := c.ShouldBindJSON(&member); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request, unable to map payload"})
+		return
+	}
+
+	result = db.Save(&member)
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Updated successful"})
+}
+
+func CountMembers(c *gin.Context) {
+	var count int64
+	db := config.DB()
+	if err := db.Model(&entity.Member{}).Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"count": count})
 }

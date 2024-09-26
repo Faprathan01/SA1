@@ -1,108 +1,112 @@
 package controller
 
 import (
-	"net/http"
 	"PJ/backend/config"
 	"PJ/backend/entity"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
-// POST /packages
 func CreatePackage(c *gin.Context) {
-	var pkg entity.Package
+	var pac entity.Package
 
-	// Bind JSON data to package entity
-	if err := c.ShouldBindJSON(&pkg); err != nil {
+	// bind เข้าตัวแปร package
+	if err := c.ShouldBindJSON(&pac); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Retrieve DB connection
 	db := config.DB()
 
-	// Create Package record
-	if err := db.Create(&pkg).Error; err != nil {
+
+
+
+	// สร้าง package
+	pk := entity.Package{
+		PackageName: pac.PackageName,
+		Description: pac.Description,
+		Price: pac.Price,
+		Duration_days: pac.Duration_days,
+	}
+
+	// บันทึก
+	if err := db.Create(&pk).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Package created successfully", "data": pkg})
+	c.JSON(http.StatusCreated, gin.H{"message": "Created success", "data": pk})
 }
 
-// GET /packages/:id
+// GET /package/:id
 func GetPackage(c *gin.Context) {
-	id := c.Param("id")
-	var pkg entity.Package
+	ID := c.Param("id")
+	var pac entity.Package
 
-	// Retrieve DB connection
 	db := config.DB()
-
-	// Fetch package record by ID
-	if err := db.First(&pkg, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Package not found"})
+	results := db.First(&pac, ID)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, pkg)
+	if pac.ID == 0 {
+		c.JSON(http.StatusNoContent, gin.H{})
+		return
+	}
+	c.JSON(http.StatusOK, pac)
 }
 
 // GET /packages
-func ListPackages(c *gin.Context) {
-	var packages []entity.Package
+func ListPackage(c *gin.Context) {
 
-	// Retrieve DB connection
+	var pacs []entity.Package
+
 	db := config.DB()
-
-	// Fetch all package records
-	if err := db.Find(&packages).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	results := db.Find(&pacs)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, packages)
-}
-
-// PATCH /packages/:id
-func UpdatePackage(c *gin.Context) {
-	id := c.Param("id")
-	var pkg entity.Package
-
-	// Retrieve DB connection
-	db := config.DB()
-
-	// Fetch package record by ID
-	if err := db.First(&pkg, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Package not found"})
-		return
-	}
-
-	// Bind JSON data to existing record
-	if err := c.ShouldBindJSON(&pkg); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Update the package record
-	if err := db.Save(&pkg).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Package updated successfully", "data": pkg})
+	c.JSON(http.StatusOK, pacs)
 }
 
 // DELETE /packages/:id
 func DeletePackage(c *gin.Context) {
+
 	id := c.Param("id")
-
-	// Retrieve DB connection
 	db := config.DB()
+	if tx := db.Exec("DELETE FROM packages WHERE id = ?", id); tx.RowsAffected == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Deleted successful"})
 
-	// Delete the package record
-	if tx := db.Delete(&entity.Package{}, id); tx.RowsAffected == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Package not found"})
+}
+
+// PATCH /packages
+func UpdatePackages(c *gin.Context) {
+	var pac entity.Package
+
+	PacID := c.Param("id")
+
+	db := config.DB()
+	result := db.First(&pac, PacID)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "id not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Package deleted successfully"})
+	if err := c.ShouldBindJSON(&pac); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request, unable to map payload"})
+		return
+	}
+
+	result = db.Save(&pac)
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Updated successful"})
 }

@@ -20,110 +20,88 @@ func CreatePromptPay(c *gin.Context) {
 	// Retrieve DB connection
 	db := config.DB()
 
-	// Validate associated PaymentID
-	if promptPay.PaymentID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid PaymentID"})
+	// สร้าง promptpays
+	prom := entity.PromptPay{
+		PromptpayNumber: promptPay.PromptpayNumber,
+			
+	}
+
+	// บันทึก
+	if err := db.Create(&prom).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	var payment entity.Payment
-	if err := db.First(&payment, promptPay.PaymentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
-		return
-	}
-
-	// Create PromptPay record
-	if err := db.Create(&promptPay).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create PromptPay record"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"message": "PromptPay created successfully", "data": promptPay})
+	c.JSON(http.StatusCreated, gin.H{"message": "PromptPay created successfully", "data": prom})
 }
 
 // GET /promptpays/:id
 func GetPromptPay(c *gin.Context) {
-	id := c.Param("id")
+	ID := c.Param("id")
 	var promptPay entity.PromptPay
 
-	// Retrieve DB connection
 	db := config.DB()
-
-	// Fetch PromptPay record by ID
-	if err := db.Preload("Payment").First(&promptPay, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "PromptPay not found"})
+	results := db.First(&promptPay, ID)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
+	if promptPay.ID == 0 {
+		c.JSON(http.StatusNoContent, gin.H{})
+		return
+	}
 	c.JSON(http.StatusOK, promptPay)
 }
-
 // GET /promptpays
-func ListPromptPay(c *gin.Context) {
-	var promptPays []entity.PromptPay
+func ListPromptpay(c *gin.Context) {
 
-	// Retrieve DB connection
+	var promptpay []entity.PromptPay
+
 	db := config.DB()
-
-	// Fetch all PromptPay records
-	if err := db.Preload("Payment").Find(&promptPays).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch PromptPays"})
+	results := db.Find(&promptpay)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, promptPays)
+	c.JSON(http.StatusOK, promptpay)
 }
 
 // PATCH /promptpays/:id
-func UpdatePromptPay(c *gin.Context) {
-	id := c.Param("id")
-	var promptPay entity.PromptPay
+func UpdatePromptpay(c *gin.Context) {
+	var Promptpay entity.PromptPay
 
-	// Retrieve DB connection
+	PromID := c.Param("id")
+
 	db := config.DB()
-
-	// Fetch PromptPay record by ID
-	if err := db.First(&promptPay, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "PromptPay not found"})
+	result := db.First(&Promptpay, PromID)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "id not found"})
 		return
 	}
 
-	// Bind JSON data to existing record
-	if err := c.ShouldBindJSON(&promptPay); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
+	if err := c.ShouldBindJSON(&Promptpay); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request, unable to map payload"})
 		return
 	}
 
-	// Optionally validate associated PaymentID
-	if promptPay.PaymentID > 0 {
-		var payment entity.Payment
-		if err := db.First(&payment, promptPay.PaymentID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
-			return
-		}
-	}
-
-	// Update the PromptPay record
-	if err := db.Save(&promptPay).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update PromptPay record"})
+	result = db.Save(&Promptpay)
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "PromptPay updated successfully", "data": promptPay})
+	c.JSON(http.StatusOK, gin.H{"message": "Updated successful"})
 }
 
 // DELETE /promptpays/:id
-func DeletePromptPay(c *gin.Context) {
+func DeletePromtpay(c *gin.Context) {
+
 	id := c.Param("id")
-
-	// Retrieve DB connection
 	db := config.DB()
-
-	// Delete the PromptPay record
-	if tx := db.Delete(&entity.PromptPay{}, id); tx.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "PromptPay not found"})
+	if tx := db.Exec("DELETE FROM Promtpay WHERE id = ?", id); tx.RowsAffected == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id not found"})
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"message": "Deleted successful"})
 
-	c.JSON(http.StatusOK, gin.H{"message": "PromptPay deleted successfully"})
 }

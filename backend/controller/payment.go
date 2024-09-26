@@ -7,101 +7,104 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// POST /payments
+// POST /payment
 func CreatePayment(c *gin.Context) {
-	var payment entity.Payment
+	var pay entity.Payment
 
-	// Bind JSON data to payment entity
-	if err := c.ShouldBindJSON(&payment); err != nil {
+	// bind เข้าตัวแปร payment
+	if err := c.ShouldBindJSON(&pay); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	db := config.DB()
-
 	
 
-	// Create Payment record
-	if err := db.Create(&payment).Error; err != nil {
+	// สร้าง payment
+	pm := entity.Payment{
+		PaymentMethodName: pay.PaymentMethodName,
+		Amount: pay.Amount,
+		
+	}
+
+	// บันทึก
+	if err := db.Create(&pm).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Payment created successfully", "data": payment})
+	c.JSON(http.StatusCreated, gin.H{"message": "Created success", "data": pm})
 }
 
-// GET /payments/:id
+// GET /payment/:id
 func GetPayment(c *gin.Context) {
-	id := c.Param("id")
-	var payment entity.Payment
+	ID := c.Param("id")
+	var pay entity.Payment
 
 	db := config.DB()
-
-	// Fetch payment record by ID, preload related entities
-	if err := db.Preload("CreditCards").Preload("Paypals").Preload("PromptPays").Preload("Subscription").First(&payment, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
+	results := db.First(&pay, ID)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
+		return
+	}
+	if pay.ID == 0 {
+		c.JSON(http.StatusNoContent, gin.H{})
 		return
 	}
 
-	c.JSON(http.StatusOK, payment)
+	c.JSON(http.StatusOK, pay)
 }
 
 // GET /payments
-func ListPayments(c *gin.Context) {
-	var payments []entity.Payment
+func ListPayment(c *gin.Context) {
+
+	var pays []entity.Payment
 
 	db := config.DB()
-
-	// Fetch all payment records, preload related entities
-	if err := db.Preload("CreditCards").Preload("Paypals").Preload("PromptPays").Preload("Subscription").Find(&payments).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	results := db.Find(&pays)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, payments)
+	c.JSON(http.StatusOK, pays)
 }
+
 
 // PATCH /payments/:id
 func UpdatePayment(c *gin.Context) {
-	id := c.Param("id")
-	var payment entity.Payment
+	var pay entity.Payment
+
+	PayID := c.Param("id")
 
 	db := config.DB()
-
-	// Fetch payment record by ID
-	if err := db.First(&payment, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
+	result := db.First(&pay, PayID)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "id not found"})
 		return
 	}
 
-	// Bind JSON data to existing record
-	if err := c.ShouldBindJSON(&payment); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&pay); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request, unable to map payload"})
 		return
 	}
 
-	
-
-	// Update the payment record
-	if err := db.Save(&payment).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	result = db.Save(&pay)
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Payment updated successfully", "data": payment})
+	c.JSON(http.StatusOK, gin.H{"message": "Updated successful"})
 }
-
 // DELETE /payments/:id
 func DeletePayment(c *gin.Context) {
+
 	id := c.Param("id")
-
 	db := config.DB()
-
-	// Delete the payment record
-	if tx := db.Delete(&entity.Payment{}, id); tx.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
+	if tx := db.Exec("DELETE FROM payments WHERE id = ?", id); tx.RowsAffected == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id not found"})
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"message": "Deleted successful"})
 
-	c.JSON(http.StatusOK, gin.H{"message": "Payment deleted successfully"})
 }

@@ -11,112 +11,95 @@ import (
 func CreatePaypal(c *gin.Context) {
 	var paypal entity.Paypal
 
-	// Bind JSON data to Paypal entity
+	// bind เข้าตัวแปร user
 	if err := c.ShouldBindJSON(&paypal); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Retrieve DB connection
 	db := config.DB()
 
-	// Validate associated PaymentID
-	if paypal.PaymentID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid PaymentID"})
+
+	// สร้าง paypals
+	pp := entity.Paypal{
+		PaypalEmail: paypal.PaypalEmail, 
+		PaypalPassword: paypal.PaypalPassword,
+     
+		
+	}
+	// บันทึก
+	if err := db.Create(&pp).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	var payment entity.Payment
-	if err := db.First(&payment, paypal.PaymentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
-		return
-	}
-
-	// Create Paypal record
-	if err := db.Create(&paypal).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Paypal record"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"message": "Paypal created successfully", "data": paypal})
+	c.JSON(http.StatusCreated, gin.H{"message": "Paypal created successfully", "data": pp})
 }
 
 // GET /paypals/:id
 func GetPaypal(c *gin.Context) {
-	id := c.Param("id")
+	ID := c.Param("id")
 	var paypal entity.Paypal
 
-	// Retrieve DB connection
 	db := config.DB()
-
-	// Fetch Paypal record by ID
-	if err := db.Preload("Payment").First(&paypal, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Paypal not found"})
+	results := db.First(&paypal, ID)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
+	if paypal.ID == 0 {
+		c.JSON(http.StatusNoContent, gin.H{})
+		return
+	}
 	c.JSON(http.StatusOK, paypal)
 }
 
 // GET /paypals
-func ListPaypal(c *gin.Context) {
+func ListPaypals(c *gin.Context) {
 	var paypals []entity.Paypal
 
-	// Retrieve DB connection
 	db := config.DB()
 
-	// Fetch all Paypal records
-	if err := db.Preload("Payment").Find(&paypals).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch Paypals"})
+	results := db.Find(&paypals)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, paypals)
 }
 
+
 // PATCH /paypals/:id
 func UpdatePaypal(c *gin.Context) {
-	id := c.Param("id")
-	var paypal entity.Paypal
+	var pay entity.Paypal
 
-	// Retrieve DB connection
+	PacID := c.Param("id")
+
 	db := config.DB()
-
-	// Fetch Paypal record by ID
-	if err := db.First(&paypal, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Paypal not found"})
+	result := db.First(&pay, PacID)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "id not found"})
 		return
 	}
 
-	// Bind JSON data to existing record
-	if err := c.ShouldBindJSON(&paypal); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
+	if err := c.ShouldBindJSON(&pay); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request, unable to map payload"})
 		return
 	}
 
-	// Optionally validate associated PaymentID
-	if paypal.PaymentID > 0 {
-		var payment entity.Payment
-		if err := db.First(&payment, paypal.PaymentID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
-			return
-		}
-	}
-
-	// Update the Paypal record
-	if err := db.Save(&paypal).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Paypal record"})
+	result = db.Save(&pay)
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Paypal updated successfully", "data": paypal})
+	c.JSON(http.StatusOK, gin.H{"message": "Updated successful"})
 }
 
 // DELETE /paypals/:id
 func DeletePaypal(c *gin.Context) {
 	id := c.Param("id")
 
-	// Retrieve DB connection
 	db := config.DB()
 
 	// Delete the Paypal record

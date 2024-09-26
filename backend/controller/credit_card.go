@@ -6,12 +6,11 @@ import (
 	"PJ/backend/entity"
 	"github.com/gin-gonic/gin"
 )
-
-// POST /credit-cards
-func CreateCreditCard(c *gin.Context) {
+// POST /Creditcard
+func CreateCreditcard(c *gin.Context) {
 	var creditCard entity.CreditCard
 
-	// Bind JSON data to creditCard entity
+	// Bind JSON data to PromptPay entity
 	if err := c.ShouldBindJSON(&creditCard); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
 		return
@@ -20,111 +19,90 @@ func CreateCreditCard(c *gin.Context) {
 	// Retrieve DB connection
 	db := config.DB()
 
-	// Validate the associated PaymentID
-	if creditCard.PaymentID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid PaymentID"})
+	// สร้าง Creditcard
+	cc := entity.CreditCard{
+		NameOnCard: creditCard.NameOnCard,
+		CardNumber: creditCard.CardNumber,
+		ExpiryDate: creditCard.ExpiryDate,
+		CVV:        creditCard.CVV,
+	}
+
+	// บันทึก
+	if err := db.Create(&cc).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	var payment entity.Payment
-	if err := db.First(&payment, creditCard.PaymentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
-		return
-	}
-
-	// Create CreditCard record
-	creditCard.Payment = payment
-	if err := db.Create(&creditCard).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Credit Card"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"message": "Credit Card created successfully", "data": creditCard})
+	c.JSON(http.StatusCreated, gin.H{"message": "PromptPay created successfully", "data": cc})
 }
-
-// GET /credit-cards/:id
-func GetCreditCard(c *gin.Context) {
-	id := c.Param("id")
+// GET /Creditcard/:id
+func GetCreditcard(c *gin.Context) {
+	ID := c.Param("id")
 	var creditCard entity.CreditCard
 
-	// Retrieve DB connection
 	db := config.DB()
-
-	// Fetch credit card record by ID
-	if err := db.Preload("Payment").First(&creditCard, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Credit Card not found"})
+	results := db.First(&creditCard, ID)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
+	if creditCard.ID == 0 {
+		c.JSON(http.StatusNoContent, gin.H{})
+		return
+	}
 	c.JSON(http.StatusOK, creditCard)
 }
 
-// GET /credit-cards
-func ListCreditCard(c *gin.Context) {
-	var creditCards []entity.CreditCard
+// GET /Creditcard
+func ListCreditcard(c *gin.Context) {
 
-	// Retrieve DB connection
+	var creditCard []entity.CreditCard
+
 	db := config.DB()
-
-	// Fetch all credit card records
-	if err := db.Preload("Payment").Find(&creditCards).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch Credit Cards"})
+	results := db.Find(&creditCard)
+	if results.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": results.Error.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, creditCards)
+	c.JSON(http.StatusOK, creditCard)
 }
 
-// PATCH /credit-cards/:id
-func UpdateCreditCard(c *gin.Context) {
-	id := c.Param("id")
+// PATCH /Creditcards/:id
+func UpdateCreditcard(c *gin.Context) {
 	var creditCard entity.CreditCard
 
-	// Retrieve DB connection
+	ccID := c.Param("id")
+
 	db := config.DB()
-
-	// Fetch credit card record by ID
-	if err := db.First(&creditCard, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Credit Card not found"})
+	result := db.First(&creditCard, ccID)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "id not found"})
 		return
 	}
 
-	// Bind JSON data to existing record
 	if err := c.ShouldBindJSON(&creditCard); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request, unable to map payload"})
 		return
 	}
 
-	// Optionally validate the associated PaymentID
-	if creditCard.PaymentID > 0 {
-		var payment entity.Payment
-		if err := db.First(&payment, creditCard.PaymentID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
-			return
-		}
-	}
-
-	// Update the credit card record
-	if err := db.Save(&creditCard).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Credit Card"})
+	result = db.Save(&creditCard)
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Credit Card updated successfully", "data": creditCard})
+	c.JSON(http.StatusOK, gin.H{"message": "Updated successful"})
 }
 
-// DELETE /credit-cards/:id
-func DeleteCreditCard(c *gin.Context) {
+// DELETE /Creditcards/:id
+func DeleteCreditcard(c *gin.Context) {
+
 	id := c.Param("id")
-
-	// Retrieve DB connection
 	db := config.DB()
-
-	// Delete the credit card record
-	if tx := db.Delete(&entity.CreditCard{}, id); tx.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Credit Card not found"})
+	if tx := db.Exec("DELETE FROM Creditcard WHERE id = ?", id); tx.RowsAffected == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id not found"})
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"message": "Deleted successful"})
 
-	c.JSON(http.StatusOK, gin.H{"message": "Credit Card deleted successfully"})
 }
